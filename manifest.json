@@ -6,7 +6,7 @@
     "min-app-version": "1.5.0",
     "app-version-stop": "",
     "author": "jesse@jesse-young.net",
-    "github": "",
+    "github": "https://github.com/jesseryoung/better-discord-plugin",
     "tags": ["discord"],
     "thumbnail": "assets/thumbnail.png",
     "icon": "assets/icon.png"
