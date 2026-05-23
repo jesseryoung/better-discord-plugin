@@ -1,0 +1,10 @@
+{
+    "author": "jesse@jesse-young.net",
+    "credits": {
+        "Assets": ["Material Design Icons (Apache 2.0)"]
+    },
+    "comments": {
+        "en_US": "Control Discord voice channels from your Stream Deck — mute individuals, adjust their volume with the knobs, and page through everyone in the channel."
+    },
+    "copyright": "Copyright (C) 2025 Jesse Young"
+}

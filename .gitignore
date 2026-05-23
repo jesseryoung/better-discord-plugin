@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+backend/.venv/
+.venv/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# Secrets / plugin settings (contain client_secret and access_token)
+settings.json
+
+
+# OS
+.DS_Store
+Thumbs.db

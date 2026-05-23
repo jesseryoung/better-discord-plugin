@@ -1,0 +1,35 @@
+{
+    "name": "Better Discord StreamController Plugin",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance"
+            ]
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/setup-claude.sh",
+    "runArgs": [
+        "--userns=keep-id",
+        "--security-opt=label=type:container_runtime_t"
+    ],
+    "remoteEnv": {
+        "XDG_RUNTIME_DIR": "/run/user/1000"
+    },
+    "mounts": [
+        {
+            "source": "claude-auth",
+            "target": "/claude-auth",
+            "type": "volume"
+        },
+        {
+            "source": "/run/user/1000",
+            "target": "/run/user/1000",
+            "type": "bind"
+        }
+    ],
+    "remoteUser": "vscode"
+}

@@ -1,0 +1,8 @@
+{
+    "generic": {
+        "license": "MIT",
+        "license-url": "https://opensource.org/licenses/MIT",
+        "description": "Better Discord plugin for StreamController"
+    },
+    "contributions": []
+}

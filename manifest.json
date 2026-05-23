@@ -1,0 +1,13 @@
+{
+    "id": "net_jesseyoung_betterdiscord",
+    "name": "Better Discord",
+    "description": "Better Discord",
+    "version": "0.0.1",
+    "min-app-version": "1.5.0",
+    "app-version-stop": "",
+    "author": "jesse@jesse-young.net",
+    "github": "",
+    "tags": ["discord"],
+    "thumbnail": "assets/thumbnail.png",
+    "icon": "assets/icon.png"
+}
