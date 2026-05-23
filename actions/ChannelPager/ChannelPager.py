@@ -81,6 +81,9 @@ class ChannelPager(ActionBase):
             if isinstance(self.input_ident, Input.Touchscreen):
                 idx = int(self.input_ident.index)
                 return None if idx == 0 else idx - 1
+            if isinstance(self.input_ident, Input.Dial):
+                idx = int(self.input_ident.index)
+                return None if idx == 0 else idx - 1
         except Exception as e:
             log.error(f"ChannelPager: could not compute slot index: {e}")
         return None

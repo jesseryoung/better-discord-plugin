@@ -1,11 +1,6 @@
 import os
 import threading
 
-import gi
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-from gi.repository import Adw
-
 from src.backend.PluginManager.PluginBase import PluginBase
 from src.backend.PluginManager.ActionHolder import ActionHolder
 
@@ -62,6 +57,8 @@ class BetterDiscord(PluginBase):
             app_version="1.5.0",
         )
 
+        self.register_page(os.path.join(self.PATH, "pages", "Discord Channel Pager.json"))
+
     # ----------------------------------------------------------------- auth
 
     def _try_connect(self) -> None:
@@ -103,23 +100,29 @@ class BetterDiscord(PluginBase):
     # ---------------------------------------------------------- config UI
 
     def get_config_rows(self) -> list:
+        import gi
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+        from gi.repository import Adw
+
         self._client_id_row = Adw.EntryRow()
         self._client_id_row.set_title("Discord Application Client ID")
 
-        self._client_secret_row = Adw.PasswordEntryRow()
+        # PasswordEntryRow was added in libadwaita 1.2; fall back to EntryRow if unavailable
+        if hasattr(Adw, "PasswordEntryRow"):
+            self._client_secret_row = Adw.PasswordEntryRow()
+        else:
+            self._client_secret_row = Adw.EntryRow()
         self._client_secret_row.set_title("Discord Application Client Secret")
 
-        self._load_config_values()
+        settings = self.get_settings()
+        self._client_id_row.set_text(settings.get("client_id", ""))
+        self._client_secret_row.set_text(settings.get("client_secret", ""))
 
         self._client_id_row.connect("changed", self._on_credentials_changed)
         self._client_secret_row.connect("changed", self._on_credentials_changed)
 
         return [self._client_id_row, self._client_secret_row]
-
-    def _load_config_values(self) -> None:
-        settings = self.get_settings()
-        self._client_id_row.set_text(settings.get("client_id", ""))
-        self._client_secret_row.set_text(settings.get("client_secret", ""))
 
     def _on_credentials_changed(self, widget) -> None:
         settings = self.get_settings()

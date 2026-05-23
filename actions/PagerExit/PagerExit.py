@@ -2,18 +2,17 @@ import os
 from loguru import logger as log
 
 from src.backend.PluginManager.ActionBase import ActionBase
+from src.Signals import Signals
 
 
 class PagerExit(ActionBase):
     """
     The Exit navigation button (row 1, col 0).
-    Resets the pager offset to 0 and navigates back to whichever page
-    was active before the user switched to the channel pager page.
 
-    The previous page path must be stored on plugin_base.prev_page_path
-    before the switch to the pager page occurs. Any action or button that
-    triggers the switch TO this page should set:
-        self.plugin_base.prev_page_path = self.deck_controller.active_page.json_path
+    Automatically captures the previous page by subscribing to the
+    ChangePage signal. No custom "launch" action is needed — just use
+    StreamController's built-in Change Page action on your Home page to
+    navigate here, and Exit will always know where to go back.
     """
 
     def __init__(self, *args, **kwargs):
@@ -24,20 +23,29 @@ class PagerExit(ActionBase):
         self.set_media(media_path=icon_path, size=0.6)
         self.set_center_label("Exit")
 
+        # Subscribe to page changes so we always know where we came from.
+        # ChangePage fires with (controller, old_path, new_path) on every switch.
+        self.connect(signal=Signals.ChangePage, callback=self._on_page_changed)
+
+    def _on_page_changed(self, controller, old_path: str, new_path: str) -> None:
+        # Only care about switches TO this action's own page on this deck.
+        if controller is not self.deck_controller:
+            return
+        if not hasattr(self.page, "json_path"):
+            return
+        if new_path == self.page.json_path and old_path:
+            self.plugin_base.prev_page_path = old_path
+            log.debug(f"PagerExit: captured prev_page_path = {old_path}")
+
     def on_key_down(self) -> None:
-        # Reset the pager scroll position
         try:
-            # Walk offset back to 0 by calling page_down until we wrap,
-            # or just set it directly (simpler).
-            # The backend doesn't expose set_offset, so we reset via plugin_base.
             self.plugin_base.reset_pager_offset()
         except Exception as e:
             log.error(f"PagerExit: reset_pager_offset failed: {e}")
 
-        # Navigate back to the previous page
         prev_path = getattr(self.plugin_base, "prev_page_path", None)
         if not prev_path:
-            log.warning("PagerExit: no prev_page_path stored on plugin_base")
+            log.warning("PagerExit: no prev_page_path — navigate to this page first")
             return
         try:
             import globals as gl

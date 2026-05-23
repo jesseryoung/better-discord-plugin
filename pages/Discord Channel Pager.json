@@ -1,0 +1,105 @@
+{
+    "keys": {
+        "0x0": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::PagerDown"}
+                    ]
+                }
+            }
+        },
+        "0x1": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::PagerExit"}
+                    ]
+                }
+            }
+        },
+        "1x0": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        },
+        "2x0": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        },
+        "3x0": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        },
+        "1x1": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        },
+        "2x1": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        },
+        "3x1": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        }
+    },
+    "dials": {
+        "1": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        },
+        "2": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        },
+        "3": {
+            "states": {
+                "0": {
+                    "actions": [
+                        {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
+                    ]
+                }
+            }
+        }
+    }
+}
