@@ -2,7 +2,6 @@ import os
 from loguru import logger as log
 
 from src.backend.PluginManager.ActionBase import ActionBase
-import src.backend.GlobalEnv as gl
 
 
 class PagerExit(ActionBase):
@@ -26,11 +25,6 @@ class PagerExit(ActionBase):
         self.set_center_label("Exit")
 
     def on_key_down(self) -> None:
-        try:
-            self.plugin_base.backend.page_down.__func__  # ensure backend is alive
-        except Exception:
-            pass
-
         # Reset the pager scroll position
         try:
             # Walk offset back to 0 by calling page_down until we wrap,
@@ -46,6 +40,7 @@ class PagerExit(ActionBase):
             log.warning("PagerExit: no prev_page_path stored on plugin_base")
             return
         try:
+            import globals as gl
             prev_page = gl.page_manager.get_page(prev_path, self.deck_controller)
             self.deck_controller.load_page(prev_page)
         except Exception as e:
