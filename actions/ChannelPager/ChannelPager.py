@@ -125,15 +125,11 @@ class ChannelPager(ActionBase):
         label_size = 10 if is_key else None
 
         if not self.plugin_base.backend.is_connected():
-            if self._slot_index == 0:
+            if self._slot_index is not None:
                 warning_path = os.path.join(self.plugin_base.PATH, "assets", "not_connected.svg")
-                self.set_media(media_path=warning_path, size=0.75)
+                self.set_media(media_path=warning_path, size=1.0)
                 self.set_top_label("", font_size=label_size)
                 self.set_bottom_label("not connected to discord", font_size=label_size)
-            else:
-                self.set_media(media_path=None)
-                self.set_top_label("", font_size=label_size)
-                self.set_bottom_label("", font_size=label_size)
             return
 
         member = self._get_my_member()
