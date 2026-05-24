@@ -1,4 +1,5 @@
 import os
+import weakref
 from loguru import logger as log
 
 from src.backend.PluginManager.ActionBase import ActionBase
@@ -6,6 +7,7 @@ from src.backend.DeckManagement.InputIdentifier import Input
 
 
 class ChannelPager(ActionBase):
+    _instances: weakref.WeakSet = weakref.WeakSet()
     """
     Displays one person slot in the Discord channel pager.
 
@@ -26,6 +28,7 @@ class ChannelPager(ActionBase):
         self._slot_index: int | None = None
 
     def on_ready(self) -> None:
+        ChannelPager._instances.add(self)
         self._slot_index = self._compute_slot_index()
         self._refresh_display()
 
@@ -55,17 +58,12 @@ class ChannelPager(ActionBase):
         """
         Derive which of the 9 person slots this action occupies from its position.
 
-        Key inputs  (rows 0–1, cols 1–3):
-          coords (x, y) where x=col, y=row
-          slot = (1 - y) * 3 + x + 2
-            → (1,0)=6  (2,0)=7  (3,0)=8
-            → (1,1)=3  (2,1)=4  (3,1)=5
+        Fill order (touch bar first, then buttons):
+          slots 0-2 → display strip / dials (index 1-3): idx 1=0  idx 2=1  idx 3=2
+          slots 3-5 → bottom button row (y=1, cols 1-3): (1,1)=3  (2,1)=4  (3,1)=5
+          slots 6-8 → top button row    (y=0, cols 1-3): (1,0)=6  (2,0)=7  (3,0)=8
 
-        Touchscreen inputs (display strip, col 1–3 → index 1–3):
-          slot = index - 1
-            → index 1=0  index 2=1  index 3=2
-
-        Col 0 and touchscreen index 0 are navigation / unassigned.
+        Col 0 and dial/touchscreen index 0 are navigation / unassigned.
         """
         try:
             if isinstance(self.input_ident, Input.Key):
@@ -127,7 +125,7 @@ class ChannelPager(ActionBase):
 
         if member is None:
             self.set_media(media_path=None)
-            self.set_center_label("")
+            self.set_bottom_label("")
             return
 
         try:
@@ -135,7 +133,7 @@ class ChannelPager(ActionBase):
         except Exception:
             muted = False
 
-        icon_path = os.path.join(self.plugin_base.PATH, "assets", "person.png")
-        self.set_media(media_path=icon_path, size=0.75)
+        icon_path = os.path.join(self.plugin_base.PATH, "assets", "person.svg")
+        self.set_media(media_path=icon_path, size=0.6)
         label = f"[M] {member['name']}" if muted else member["name"]
-        self.set_center_label(label)
+        self.set_bottom_label(label)

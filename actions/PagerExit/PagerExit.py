@@ -19,7 +19,7 @@ class PagerExit(ActionBase):
         super().__init__(*args, **kwargs)
 
     def on_ready(self) -> None:
-        icon_path = os.path.join(self.plugin_base.PATH, "assets", "arrow_back.png")
+        icon_path = os.path.join(self.plugin_base.PATH, "assets", "arrow_back.svg")
         self.set_media(media_path=icon_path, size=0.75)
         self.set_center_label("")
 

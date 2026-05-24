@@ -5,7 +5,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::PagerDown"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -14,7 +15,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::PagerExit"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -23,7 +25,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -32,7 +35,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -41,7 +45,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -50,7 +55,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -59,7 +65,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -68,7 +75,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         }
@@ -79,7 +87,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -88,7 +97,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         },
@@ -97,7 +107,8 @@
                 "0": {
                     "actions": [
                         {"id": "net_jesseyoung_betterdiscord::ChannelPager"}
-                    ]
+                    ],
+                    "image-control-action": 0
                 }
             }
         }

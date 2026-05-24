@@ -15,7 +15,7 @@ class PagerDown(ActionBase):
         super().__init__(*args, **kwargs)
 
     def on_ready(self) -> None:
-        icon_path = os.path.join(self.plugin_base.PATH, "assets", "arrow_down.png")
+        icon_path = os.path.join(self.plugin_base.PATH, "assets", "arrow_down.svg")
         self.set_media(media_path=icon_path, size=0.75)
         self.set_center_label("")
 

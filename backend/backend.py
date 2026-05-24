@@ -6,6 +6,7 @@ import queue
 import socket
 import struct
 import threading
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -139,7 +140,7 @@ class Backend(BackendBase):
 
     # -------------------------------------------------------------------- auth
 
-    def connect(self, client_id: str, client_secret: str, access_token: str | None) -> bool:
+    def connect(self, client_id: str, access_token: str | None) -> bool:
         if not client_id:
             log.warning("Discord client_id not configured")
             return False
@@ -244,7 +245,10 @@ class Backend(BackendBase):
             req = urllib.request.Request(
                 "https://discord.com/api/oauth2/token",
                 data=params,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": "DiscordBot (https://github.com/jesseryoung/better-discord-plugin, 0.0.1)",
+                },
             )
             with urllib.request.urlopen(req, timeout=30) as r:
                 token_data = json.loads(r.read().decode())
@@ -252,9 +256,24 @@ class Backend(BackendBase):
             if not token:
                 log.error(f"Token exchange response had no access_token: {token_data}")
             return token
-        except Exception as e:
-            log.error(f"Token exchange HTTP request failed: {e}")
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode()
+            except Exception:
+                pass
+            log.error(f"Token exchange HTTP {e.code} {e.reason}: {body}")
             return None
+        except Exception as e:
+            log.error(f"Token exchange failed: {e}")
+            return None
+
+    def disconnect(self) -> None:
+        self._running = False
+        self._connected = False
+        self._close_socket()
+        if self._listener_thread and self._listener_thread.is_alive():
+            self._listener_thread.join(timeout=2)
 
     def is_connected(self) -> bool:
         return self._connected
@@ -287,6 +306,11 @@ class Backend(BackendBase):
                     self._offset = 0
         except Exception as e:
             log.error(f"Failed to refresh channel members: {e}")
+            return
+        try:
+            self.frontend.on_members_updated()
+        except Exception as e:
+            log.warning(f"Could not notify frontend of member update: {e}")
 
     # ---------------------------------------------------------- pager / state
 
@@ -297,12 +321,11 @@ class Backend(BackendBase):
     def get_visible_members(self) -> list[dict | None]:
         """
         Returns 9 elements for the 9 person slots:
-          slot 0-2 → display strip row (row 2), cols 1-3  (knob-controlled)
-          slot 3-5 → bottom button row (row 1), cols 1-3
-          slot 6-8 → top button row (row 0), cols 1-3
+          slot 0-2 → display strip / dials, indices 1-3   — fills first
+          slot 3-5 → bottom button row (row 1), cols 1-3  — fills second
+          slot 6-8 → top button row    (row 0), cols 1-3  — fills last
 
-        None means the slot is empty. Fills bottom-up so the first
-        members (alphabetically) are always on the knob row.
+        None means the slot is empty.
         """
         with self._members_lock:
             members = list(self._members)
