@@ -30,21 +30,28 @@ class Backend(BackendBase):
         self._members: list[dict] = []
         self._members_lock = threading.Lock()
         self._volumes: dict[str, int] = {}
-        self._restore_volumes: dict[str, int] = {}
         self._offset = 0
         self._running = False
         self._listener_thread: threading.Thread | None = None
+        self._avatar_cache: dict[str, str] = {}
+        self._muted: dict[str, bool] = {}
+        self._current_user_id: str | None = None
 
     # ------------------------------------------------------------------ socket
 
     def _ipc_paths(self) -> list[str]:
         import tempfile
         paths = []
+        xdg = os.environ.get("XDG_RUNTIME_DIR", "")
+        # Inside a Flatpak XDG_RUNTIME_DIR is sandboxed; the host runtime dir is /run/user/<uid>
+        host_xdg = f"/run/user/{os.getuid()}"
         for i in range(10):
-            xdg = os.environ.get("XDG_RUNTIME_DIR", "")
             if xdg:
                 paths.append(os.path.join(xdg, f"discord-ipc-{i}"))
                 paths.append(os.path.join(xdg, "app", "com.discordapp.Discord", f"discord-ipc-{i}"))
+            if host_xdg != xdg:
+                paths.append(os.path.join(host_xdg, f"discord-ipc-{i}"))
+                paths.append(os.path.join(host_xdg, "app", "com.discordapp.Discord", f"discord-ipc-{i}"))
             paths.append(os.path.join(tempfile.gettempdir(), f"discord-ipc-{i}"))
             paths.append(f"/tmp/discord-ipc-{i}")
         return paths
@@ -127,13 +134,17 @@ class Backend(BackendBase):
                         continue
 
                 if evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE"):
+                    log.debug(f"Discord voice event: {evt}")
                     threading.Thread(target=self._refresh_members, daemon=True).start()
+                elif evt and evt != "SPEAKING":
+                    log.debug(f"Discord event (unhandled): {evt}")
 
             except Exception as e:
                 log.error(f"Discord IPC listener error: {e}")
                 self._connected = False
                 self._running = False
                 break
+        log.info("Discord IPC listener stopped")
 
     def _start_listener(self) -> None:
         self._running = True
@@ -158,6 +169,7 @@ class Backend(BackendBase):
             log.error(f"Discord handshake failed: {resp}")
             self._close_socket()
             return False
+        self._current_user_id = (resp.get("data") or {}).get("user", {}).get("id")
 
         if not access_token:
             self._close_socket()
@@ -294,6 +306,33 @@ class Backend(BackendBase):
             except Exception as e:
                 log.error(f"Failed to subscribe to {evt}: {e}")
 
+    def _fetch_avatar(self, user_id: str, avatar_hash: str) -> str | None:
+        """Download and cache a user's Discord avatar. Returns local file path or None."""
+        if not avatar_hash:
+            return None
+        cache_key = f"{user_id}_{avatar_hash}"
+        cached = self._avatar_cache.get(cache_key)
+        if cached and os.path.exists(cached):
+            return cached
+        import tempfile
+        cache_dir = os.path.join(tempfile.gettempdir(), "better_discord_avatars")
+        os.makedirs(cache_dir, exist_ok=True)
+        path = os.path.join(cache_dir, f"{cache_key}.png")
+        url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.png?size=64"
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "DiscordBot (https://github.com/jesseryoung/better-discord-plugin, 0.0.1)"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                with open(path, "wb") as f:
+                    f.write(r.read())
+            self._avatar_cache[cache_key] = path
+            return path
+        except Exception as e:
+            log.warning(f"Failed to fetch avatar for {user_id}: {e}")
+            return None
+
     def _refresh_members(self) -> None:
         try:
             resp = self._send_frame({"cmd": "GET_SELECTED_VOICE_CHANNEL", "args": {}})
@@ -302,9 +341,15 @@ class Backend(BackendBase):
             members = []
             for vs in voice_states:
                 user = vs.get("user", {})
+                user_id = user.get("id", "")
+                if user_id == self._current_user_id:
+                    continue
+                avatar_hash = user.get("avatar", "")
+                avatar_path = self._fetch_avatar(user_id, avatar_hash)
                 members.append({
-                    "user_id": user.get("id", ""),
+                    "user_id": user_id,
                     "name": vs.get("nick") or user.get("username", "?"),
+                    "avatar_path": avatar_path,
                 })
             members.sort(key=lambda m: m["name"].casefold())
             with self._members_lock:
@@ -317,7 +362,7 @@ class Backend(BackendBase):
         try:
             self.frontend.on_members_updated()
         except Exception as e:
-            log.warning(f"Could not notify frontend of member update: {e}")
+            log.error(f"Could not notify frontend of member update: {e}")
 
     # ---------------------------------------------------------- pager / state
 
@@ -384,17 +429,21 @@ class Backend(BackendBase):
     def get_user_volume(self, user_id: str) -> int:
         return self._volumes.get(user_id, 100)
 
+    def set_user_mute(self, user_id: str, muted: bool) -> None:
+        self._muted[user_id] = muted
+        try:
+            self._send_frame({
+                "cmd": "SET_USER_VOICE_SETTINGS",
+                "args": {"user_id": user_id, "mute": muted},
+            })
+        except Exception as e:
+            log.error(f"set_user_mute failed for {user_id}: {e}")
+
     def toggle_mute(self, user_id: str) -> None:
-        current = self.get_user_volume(user_id)
-        if current == 0:
-            restore = self._restore_volumes.pop(user_id, 100)
-            self.set_user_volume(user_id, restore)
-        else:
-            self._restore_volumes[user_id] = current
-            self.set_user_volume(user_id, 0)
+        self.set_user_mute(user_id, not self._muted.get(user_id, False))
 
     def is_muted(self, user_id: str) -> bool:
-        return self._volumes.get(user_id, 100) == 0
+        return self._muted.get(user_id, False)
 
 
 backend = Backend()

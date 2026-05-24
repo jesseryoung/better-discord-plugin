@@ -22,6 +22,7 @@ class PagerDown(ActionBase):
     def on_key_down(self) -> None:
         try:
             self.plugin_base.backend.page_down()
+            self.plugin_base._refresh_all_pager_displays()
         except Exception as e:
             log.error(f"PagerDown: page_down failed: {e}")
             self.show_error()

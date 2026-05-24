@@ -123,17 +123,25 @@ class ChannelPager(ActionBase):
     def _refresh_display(self) -> None:
         member = self._get_my_member()
 
+        is_key = isinstance(self.input_ident, Input.Key)
+        label_size = 8 if is_key else None
+
         if member is None:
             self.set_media(media_path=None)
-            self.set_bottom_label("")
+            self.set_top_label("", font_size=label_size)
+            self.set_bottom_label("", font_size=label_size)
             return
 
+        user_id = member["user_id"]
         try:
-            muted = self.plugin_base.backend.is_muted(member["user_id"])
+            muted = self.plugin_base.backend.is_muted(user_id)
+            volume = self.plugin_base.backend.get_user_volume(user_id)
         except Exception:
             muted = False
+            volume = 100
 
-        icon_path = os.path.join(self.plugin_base.PATH, "assets", "person.svg")
-        self.set_media(media_path=icon_path, size=0.6)
-        label = f"[M] {member['name']}" if muted else member["name"]
-        self.set_bottom_label(label)
+        avatar_path = member.get("avatar_path")
+        icon_path = avatar_path or os.path.join(self.plugin_base.PATH, "assets", "person.svg")
+        self.set_media(media_path=icon_path, size=0.85)
+        self.set_top_label(member["name"], font_size=label_size)
+        self.set_bottom_label("mute" if muted else f"{volume}%", font_size=label_size)
