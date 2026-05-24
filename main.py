@@ -1,8 +1,10 @@
 import os
 import threading
 
+import globals as gl
 from src.backend.PluginManager.PluginBase import PluginBase
 from src.backend.PluginManager.ActionHolder import ActionHolder
+from src.Signals import Signals
 
 from .actions.ChannelPager.ChannelPager import ChannelPager
 from .actions.PagerDown.PagerDown import PagerDown
@@ -13,10 +15,9 @@ class BetterDiscord(PluginBase):
     def __init__(self):
         super().__init__()
 
-        # Stores the page path to return to when Exit is pressed.
-        # Set this before navigating TO the channel pager page:
-        #   self.plugin_base.prev_page_path = deck_controller.active_page.json_path
         self.prev_page_path: str | None = None
+        self._pager_page_path = os.path.join(self.PATH, "pages", "Discord Channel Pager.json")
+        gl.signal_manager.connect_signal(signal=Signals.ChangePage, callback=self._on_page_changed_global)
 
         self.launch_backend(
             backend_path=os.path.join(self.PATH, "backend", "backend.py"),
@@ -126,6 +127,10 @@ class BetterDiscord(PluginBase):
                 action._refresh_display()
             except Exception:
                 pass
+
+    def _on_page_changed_global(self, controller, old_path: str, new_path: str) -> None:
+        if new_path == self._pager_page_path and old_path:
+            self.prev_page_path = old_path
 
     def reset_pager_offset(self) -> None:
         """Called by PagerExit to reset the scroll position to the top."""
