@@ -36,6 +36,7 @@ class Backend(BackendBase):
         self._avatar_cache: dict[str, str] = {}
         self._muted: dict[str, bool] = {}
         self._current_user_id: str | None = None
+        self._channel_id: str | None = None
 
     # ------------------------------------------------------------------ socket
 
@@ -135,6 +136,8 @@ class Backend(BackendBase):
 
                 if evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE"):
                     threading.Thread(target=self._refresh_members, daemon=True).start()
+                elif evt == "VOICE_CHANNEL_SELECT":
+                    threading.Thread(target=self._on_channel_select, daemon=True).start()
 
             except Exception as e:
                 log.error(f"Discord IPC listener error: {e}")
@@ -193,7 +196,8 @@ class Backend(BackendBase):
 
         self._connected = True
         self._subscribe_events()
-        threading.Thread(target=self._refresh_members, daemon=True).start()
+        self._refresh_members()
+        self._subscribe_voice_state_events(self._channel_id)
         return True
 
     def get_fresh_token(self, client_id: str, client_secret: str) -> tuple[str | None, str | None]:
@@ -296,11 +300,23 @@ class Backend(BackendBase):
     # ---------------------------------------------------------- Discord events
 
     def _subscribe_events(self) -> None:
+        try:
+            self._send_frame({"cmd": "SUBSCRIBE", "evt": "VOICE_CHANNEL_SELECT", "args": {}})
+        except Exception as e:
+            log.error(f"Failed to subscribe to VOICE_CHANNEL_SELECT: {e}")
+
+    def _subscribe_voice_state_events(self, channel_id: str | None) -> None:
+        if not channel_id:
+            return
         for evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE"):
             try:
-                self._send_frame({"cmd": "SUBSCRIBE", "evt": evt, "args": {}})
+                self._send_frame({"cmd": "SUBSCRIBE", "evt": evt, "args": {"channel_id": channel_id}})
             except Exception as e:
-                log.error(f"Failed to subscribe to {evt}: {e}")
+                log.error(f"Failed to subscribe to {evt} for channel {channel_id}: {e}")
+
+    def _on_channel_select(self) -> None:
+        self._refresh_members()
+        self._subscribe_voice_state_events(self._channel_id)
 
     def _fetch_avatar(self, user_id: str, avatar_hash: str) -> str | None:
         """Download and cache a user's Discord avatar. Returns local file path or None."""
@@ -333,6 +349,7 @@ class Backend(BackendBase):
         try:
             resp = self._send_frame({"cmd": "GET_SELECTED_VOICE_CHANNEL", "args": {}})
             data = resp.get("data") or {}
+            self._channel_id = data.get("id") or None
             voice_states = data.get("voice_states", [])
             members = []
             for vs in voice_states:
