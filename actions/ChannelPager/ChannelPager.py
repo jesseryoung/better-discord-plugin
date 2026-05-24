@@ -124,7 +124,7 @@ class ChannelPager(ActionBase):
         member = self._get_my_member()
 
         is_key = isinstance(self.input_ident, Input.Key)
-        label_size = 8 if is_key else None
+        label_size = 10 if is_key else None
 
         if member is None:
             self.set_media(media_path=None)
