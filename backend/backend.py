@@ -143,6 +143,10 @@ class Backend(BackendBase):
                 log.error(f"Discord IPC listener error: {e}")
                 self._connected = False
                 self._running = False
+                try:
+                    self.frontend.on_members_updated()
+                except Exception:
+                    pass
                 break
 
     def _start_listener(self) -> None:
