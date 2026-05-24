@@ -134,17 +134,13 @@ class Backend(BackendBase):
                         continue
 
                 if evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE"):
-                    log.debug(f"Discord voice event: {evt}")
                     threading.Thread(target=self._refresh_members, daemon=True).start()
-                elif evt and evt != "SPEAKING":
-                    log.debug(f"Discord event (unhandled): {evt}")
 
             except Exception as e:
                 log.error(f"Discord IPC listener error: {e}")
                 self._connected = False
                 self._running = False
                 break
-        log.info("Discord IPC listener stopped")
 
     def _start_listener(self) -> None:
         self._running = True

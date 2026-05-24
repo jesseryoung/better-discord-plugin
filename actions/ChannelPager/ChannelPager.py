@@ -41,13 +41,13 @@ class ChannelPager(ActionBase):
     def event_callback(self, event, data=None) -> None:
         """Handle dial turn events for volume control in addition to legacy key events."""
         evt = str(event)
-        if "TURN_CW" in evt:
+        if "Turn CW" in evt:
             steps = (data or {}).get("steps", 1) if data else 1
             self._adjust_volume(+5 * steps)
-        elif "TURN_CCW" in evt:
+        elif "Turn CCW" in evt:
             steps = (data or {}).get("steps", 1) if data else 1
             self._adjust_volume(-5 * steps)
-        elif "SHORT_TOUCH_PRESS" in evt or "DOWN" in evt:
+        elif "Short Press" in evt or "Down" in evt:
             self._handle_tap()
         else:
             super().event_callback(event, data)
