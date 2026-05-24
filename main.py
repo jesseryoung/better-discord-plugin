@@ -129,13 +129,11 @@ class BetterDiscord(PluginBase):
                 pass
 
     def _on_page_changed_global(self, controller, old_path: str, new_path: str) -> None:
-        from loguru import logger as log
-        log.debug(f"BetterDiscord ChangePage: {old_path!r} → {new_path!r}")
-        new_name = os.path.splitext(os.path.basename(new_path or ""))[0]
         pager_name = os.path.splitext(os.path.basename(self._pager_page_path))[0]
-        if new_name == pager_name and old_path:
+        new_name = os.path.splitext(os.path.basename(new_path or ""))[0]
+        old_name = os.path.splitext(os.path.basename(old_path or ""))[0]
+        if new_name == pager_name and old_path and old_name != pager_name:
             self.prev_page_path = old_path
-            log.debug(f"BetterDiscord: captured prev_page_path={old_path!r}")
 
     def reset_pager_offset(self) -> None:
         """Called by PagerExit to reset the scroll position to the top."""

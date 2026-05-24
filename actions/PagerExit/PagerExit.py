@@ -26,7 +26,6 @@ class PagerExit(ActionBase):
             log.error(f"PagerExit: reset_pager_offset failed: {e}")
 
         prev_path = getattr(self.plugin_base, "prev_page_path", None)
-        log.debug(f"PagerExit: prev_page_path={prev_path!r}")
         if not prev_path:
             log.warning("PagerExit: no prev_page_path — navigate to this page first")
             return
