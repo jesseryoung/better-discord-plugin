@@ -28,6 +28,7 @@ class BetterDiscord(PluginBase):
 
         # On startup only try the cached token — never auto-prompt for OAuth.
         threading.Thread(target=self._try_cached_connect, daemon=True).start()
+        threading.Thread(target=self._reconnect_watcher, daemon=True).start()
 
         self.channel_pager_holder = ActionHolder(
             plugin_base=self,
@@ -72,6 +73,28 @@ class BetterDiscord(PluginBase):
         if not client_id or not access_token:
             return
         self.backend.connect(client_id, access_token)
+
+    def _reconnect_watcher(self) -> None:
+        """Polls every 10 s and reconnects automatically when Discord comes back up."""
+        import time
+        while True:
+            time.sleep(10)
+            if self.backend.is_connected():
+                continue
+            settings = self.get_settings()
+            client_id = settings.get("client_id", "")
+            access_token = settings.get("access_token")
+            if not client_id or not access_token:
+                continue
+            if not self._connect_lock.acquire(blocking=False):
+                continue
+            try:
+                self.backend.disconnect()
+                self.backend.connect(client_id, access_token)
+            except Exception:
+                pass
+            finally:
+                self._connect_lock.release()
 
     def _try_connect(self, client_id: str, client_secret: str) -> None:
         """Full OAuth flow — called by the Connect button."""
