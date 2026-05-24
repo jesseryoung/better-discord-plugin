@@ -99,19 +99,25 @@ class BetterDiscord(PluginBase):
 
     # ---------------------------------------------------------- config UI
 
-    def get_config_rows(self) -> list:
+    def get_settings_area(self):
         from loguru import logger as log
         try:
             from gi.repository import Adw
 
+            group = Adw.PreferencesGroup()
+            group.set_title("Discord Connection")
+            group.set_description(
+                "Create an application at discord.com/developers to obtain these values."
+            )
+
             self._client_id_row = Adw.EntryRow()
-            self._client_id_row.set_title("Discord Application Client ID")
+            self._client_id_row.set_title("Application Client ID")
 
             if hasattr(Adw, "PasswordEntryRow"):
                 self._client_secret_row = Adw.PasswordEntryRow()
             else:
                 self._client_secret_row = Adw.EntryRow()
-            self._client_secret_row.set_title("Discord Application Client Secret")
+            self._client_secret_row.set_title("Application Client Secret")
 
             settings = self.get_settings()
             self._client_id_row.set_text(settings.get("client_id", ""))
@@ -120,12 +126,15 @@ class BetterDiscord(PluginBase):
             self._client_id_row.connect("changed", self._on_credentials_changed)
             self._client_secret_row.connect("changed", self._on_credentials_changed)
 
-            return [self._client_id_row, self._client_secret_row]
-        except Exception as e:
-            log.error(f"BetterDiscord: get_config_rows failed: {e}")
-            return []
+            group.add(self._client_id_row)
+            group.add(self._client_secret_row)
 
-    def _on_credentials_changed(self, widget) -> None:
+            return group
+        except Exception as e:
+            log.error(f"BetterDiscord: get_settings_area failed: {e}")
+            return None
+
+    def _on_credentials_changed(self, _widget) -> None:
         settings = self.get_settings()
         settings["client_id"] = self._client_id_row.get_text()
         settings["client_secret"] = self._client_secret_row.get_text()

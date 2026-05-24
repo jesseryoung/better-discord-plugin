@@ -120,36 +120,6 @@ class ChannelPager(ActionBase):
         except Exception as e:
             log.error(f"ChannelPager: volume adjust failed: {e}")
 
-    # ---------------------------------------------------------- config UI
-
-    def get_config_rows(self) -> list:
-        from gi.repository import Adw
-
-        self._client_id_row = Adw.EntryRow()
-        self._client_id_row.set_title("Discord Application Client ID")
-
-        if hasattr(Adw, "PasswordEntryRow"):
-            self._client_secret_row = Adw.PasswordEntryRow()
-        else:
-            self._client_secret_row = Adw.EntryRow()
-        self._client_secret_row.set_title("Discord Application Client Secret")
-
-        settings = self.plugin_base.get_settings()
-        self._client_id_row.set_text(settings.get("client_id", ""))
-        self._client_secret_row.set_text(settings.get("client_secret", ""))
-
-        self._client_id_row.connect("changed", self._on_credentials_changed)
-        self._client_secret_row.connect("changed", self._on_credentials_changed)
-
-        return [self._client_id_row, self._client_secret_row]
-
-    def _on_credentials_changed(self, widget) -> None:
-        settings = self.plugin_base.get_settings()
-        settings["client_id"] = self._client_id_row.get_text()
-        settings["client_secret"] = self._client_secret_row.get_text()
-        settings.pop("access_token", None)
-        self.plugin_base.set_settings(settings)
-
     # ------------------------------------------------------------ display
 
     def _refresh_display(self) -> None:
@@ -165,7 +135,7 @@ class ChannelPager(ActionBase):
         except Exception:
             muted = False
 
-        icon_file = "mic_off.svg" if muted else "mic.svg"
-        icon_path = os.path.join(self.plugin_base.PATH, "assets", icon_file)
+        icon_path = os.path.join(self.plugin_base.PATH, "assets", "person.png")
         self.set_media(media_path=icon_path, size=0.75)
-        self.set_center_label(member["name"])
+        label = f"[M] {member['name']}" if muted else member["name"]
+        self.set_center_label(label)

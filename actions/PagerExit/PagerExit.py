@@ -19,9 +19,9 @@ class PagerExit(ActionBase):
         super().__init__(*args, **kwargs)
 
     def on_ready(self) -> None:
-        icon_path = os.path.join(self.plugin_base.PATH, "assets", "icon.png")
-        self.set_media(media_path=icon_path, size=0.6)
-        self.set_center_label("Exit")
+        icon_path = os.path.join(self.plugin_base.PATH, "assets", "arrow_back.png")
+        self.set_media(media_path=icon_path, size=0.75)
+        self.set_center_label("")
 
         # Subscribe to page changes so we always know where we came from.
         # ChangePage fires with (controller, old_path, new_path) on every switch.
