@@ -90,9 +90,9 @@ class BetterDiscord(PluginBase):
 
             # Full OAuth flow — opens Discord approval dialog.
             self._set_connect_status("Waiting for Discord approval…")
-            token = self.backend.get_fresh_token(client_id, client_secret)
+            token, err = self.backend.get_fresh_token(client_id, client_secret)
             if not token:
-                self._set_connect_status("Authorization failed — check logs")
+                self._set_connect_status(err or "Authorization failed")
                 return
 
             settings = self.get_settings()

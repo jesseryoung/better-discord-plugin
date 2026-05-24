@@ -38,12 +38,14 @@ class Backend(BackendBase):
     # ------------------------------------------------------------------ socket
 
     def _ipc_paths(self) -> list[str]:
+        import tempfile
         paths = []
         for i in range(10):
             xdg = os.environ.get("XDG_RUNTIME_DIR", "")
             if xdg:
                 paths.append(os.path.join(xdg, f"discord-ipc-{i}"))
                 paths.append(os.path.join(xdg, "app", "com.discordapp.Discord", f"discord-ipc-{i}"))
+            paths.append(os.path.join(tempfile.gettempdir(), f"discord-ipc-{i}"))
             paths.append(f"/tmp/discord-ipc-{i}")
         return paths
 
@@ -186,29 +188,28 @@ class Backend(BackendBase):
         threading.Thread(target=self._refresh_members, daemon=True).start()
         return True
 
-    def get_fresh_token(self, client_id: str, client_secret: str) -> str | None:
+    def get_fresh_token(self, client_id: str, client_secret: str) -> tuple[str | None, str | None]:
         """
-        Runs Steps 2–3 of the Discord OAuth flow:
-          - Sends AUTHORIZE (triggers an approval modal inside Discord)
-          - Waits up to 120s for the user to approve
-          - POSTs the returned code to discord.com to exchange for an access_token
-        Returns the access_token string, or None on failure.
-        The caller is responsible for saving the token to plugin settings.
+        Runs Steps 2–3 of the Discord OAuth flow.
+        Returns (access_token, None) on success, (None, error_message) on failure.
         """
         if self._running:
-            log.error("Cannot get_fresh_token while listener is active")
-            return None
+            msg = "Listener still active — call disconnect() first"
+            log.error(msg)
+            return None, msg
 
         if not self._open_socket():
-            log.error("Could not connect to Discord IPC socket for token flow")
-            return None
+            msg = "Cannot connect to Discord IPC socket — is Discord running?"
+            log.error(msg)
+            return None, msg
 
         self._send_raw(OP_HANDSHAKE, {"v": 1, "client_id": client_id})
         _, resp = self._recv_raw()
         if resp.get("evt") != "READY":
-            log.error(f"Handshake failed during token flow: {resp}")
+            msg = f"IPC handshake failed: {resp.get('evt')}"
+            log.error(msg)
             self._close_socket()
-            return None
+            return None, msg
 
         # Step 2: Authorize — Discord shows an in-app approval modal
         self._send_raw(OP_FRAME, {
@@ -220,17 +221,19 @@ class Backend(BackendBase):
         try:
             _, resp = self._recv_raw()
         except socket.timeout:
-            log.error("AUTHORIZE timed out — user did not approve the Discord modal within 120s")
+            msg = "Timed out waiting for Discord approval (120s)"
+            log.error(msg)
             self._close_socket()
-            return None
+            return None, msg
         finally:
             self._sock.settimeout(None)
 
         code = (resp.get("data") or {}).get("code")
         if not code:
-            log.error(f"AUTHORIZE did not return a code: {resp}")
+            msg = f"AUTHORIZE returned no code: {resp.get('evt')} — {(resp.get('data') or {}).get('message', '')}"
+            log.error(msg)
             self._close_socket()
-            return None
+            return None, msg
 
         self._close_socket()
 
@@ -254,19 +257,23 @@ class Backend(BackendBase):
                 token_data = json.loads(r.read().decode())
             token = token_data.get("access_token")
             if not token:
-                log.error(f"Token exchange response had no access_token: {token_data}")
-            return token
+                msg = f"Token exchange gave no access_token: {token_data}"
+                log.error(msg)
+                return None, msg
+            return token, None
         except urllib.error.HTTPError as e:
             body = ""
             try:
                 body = e.read().decode()
             except Exception:
                 pass
-            log.error(f"Token exchange HTTP {e.code} {e.reason}: {body}")
-            return None
+            msg = f"Token exchange HTTP {e.code}: {body}"
+            log.error(msg)
+            return None, msg
         except Exception as e:
-            log.error(f"Token exchange failed: {e}")
-            return None
+            msg = f"Token exchange failed: {e}"
+            log.error(msg)
+            return None, msg
 
     def disconnect(self) -> None:
         self._running = False
