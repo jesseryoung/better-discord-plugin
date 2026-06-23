@@ -72,7 +72,9 @@ class BetterDiscord(PluginBase):
         access_token = settings.get("access_token")
         if not client_id or not access_token:
             return
-        self.backend.connect(client_id, access_token)
+        if self.backend.connect(client_id, access_token):
+            return
+        self._try_refresh_token(client_id)
 
     def _reconnect_watcher(self) -> None:
         """Polls every 10 s and reconnects automatically when Discord comes back up."""
@@ -90,7 +92,8 @@ class BetterDiscord(PluginBase):
                 continue
             try:
                 self.backend.disconnect()
-                self.backend.connect(client_id, access_token)
+                if not self.backend.connect(client_id, access_token):
+                    self._try_refresh_token(client_id)
             except Exception:
                 pass
             finally:
@@ -112,15 +115,22 @@ class BetterDiscord(PluginBase):
                 self._set_connect_status("Connected", connected=True)
                 return
 
+            # Try refresh token before full OAuth flow.
+            if self._try_refresh_token(client_id):
+                self._set_connect_status("Connected", connected=True)
+                return
+
             # Full OAuth flow — opens Discord approval dialog.
             self._set_connect_status("Waiting for Discord approval…")
-            token, err = self.backend.get_fresh_token(client_id, client_secret)
+            token, refresh, err = self.backend.get_fresh_token(client_id, client_secret)
             if not token:
                 self._set_connect_status(err or "Authorization failed")
                 return
 
             settings = self.get_settings()
             settings["access_token"] = token
+            if refresh:
+                settings["refresh_token"] = refresh
             self.set_settings(settings)
 
             ok = self.backend.connect(client_id, token)
@@ -132,6 +142,25 @@ class BetterDiscord(PluginBase):
             self._set_connect_status(f"Error: {e}")
         finally:
             self._connect_lock.release()
+
+    def _try_refresh_token(self, client_id: str) -> bool:
+        """Attempt to refresh the access token using a stored refresh token."""
+        settings = self.get_settings()
+        refresh_token = settings.get("refresh_token")
+        if not refresh_token:
+            return False
+        self.backend.disconnect()
+        token, new_refresh, err = self.backend.refresh_access_token(client_id, refresh_token)
+        if not token:
+            log.warning(f"Token refresh failed: {err}")
+            settings.pop("refresh_token", None)
+            self.set_settings(settings)
+            return False
+        settings["access_token"] = token
+        if new_refresh:
+            settings["refresh_token"] = new_refresh
+        self.set_settings(settings)
+        return self.backend.connect(client_id, token)
 
     # -------------------------------------------------------------- helpers
 
@@ -232,6 +261,7 @@ class BetterDiscord(PluginBase):
         new_id = self._client_id_row.get_text()
         if new_id != settings.get("client_id", ""):
             settings.pop("access_token", None)
+            settings.pop("refresh_token", None)
             self._set_connect_status("Client ID changed — reconnect required", connected=False)
         settings["client_id"] = new_id
         # client_secret is intentionally NOT saved to disk

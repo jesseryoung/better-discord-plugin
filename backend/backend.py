@@ -204,20 +204,64 @@ class Backend(BackendBase):
         self._subscribe_voice_state_events(self._channel_id)
         return True
 
-    def get_fresh_token(self, client_id: str, client_secret: str) -> tuple[str | None, str | None]:
+    def refresh_access_token(self, client_id: str, refresh_token: str) -> tuple[str | None, str | None, str | None]:
+        """
+        Uses a refresh_token to obtain a new access_token from Discord.
+        Returns (access_token, new_refresh_token, None) on success,
+        (None, None, error_message) on failure.
+        """
+        try:
+            params = urllib.parse.urlencode({
+                "client_id": client_id,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            }).encode()
+            req = urllib.request.Request(
+                "https://discord.com/api/oauth2/token",
+                data=params,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": "DiscordBot (https://github.com/jesseryoung/better-discord-plugin, 0.0.1)",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=30) as r:
+                token_data = json.loads(r.read().decode())
+            token = token_data.get("access_token")
+            refresh = token_data.get("refresh_token")
+            if not token:
+                msg = f"Token refresh gave no access_token: {token_data}"
+                log.error(msg)
+                return None, None, msg
+            return token, refresh, None
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode()
+            except Exception:
+                pass
+            msg = f"Token refresh HTTP {e.code}: {body}"
+            log.error(msg)
+            return None, None, msg
+        except Exception as e:
+            msg = f"Token refresh failed: {e}"
+            log.error(msg)
+            return None, None, msg
+
+    def get_fresh_token(self, client_id: str, client_secret: str) -> tuple[str | None, str | None, str | None]:
         """
         Runs Steps 2–3 of the Discord OAuth flow.
-        Returns (access_token, None) on success, (None, error_message) on failure.
+        Returns (access_token, refresh_token, None) on success,
+        (None, None, error_message) on failure.
         """
         if self._running:
             msg = "Listener still active — call disconnect() first"
             log.error(msg)
-            return None, msg
+            return None, None, msg
 
         if not self._open_socket():
             msg = "Cannot connect to Discord IPC socket — is Discord running?"
             log.error(msg)
-            return None, msg
+            return None, None, msg
 
         self._send_raw(OP_HANDSHAKE, {"v": 1, "client_id": client_id})
         _, resp = self._recv_raw()
@@ -225,7 +269,7 @@ class Backend(BackendBase):
             msg = f"IPC handshake failed: {resp.get('evt')}"
             log.error(msg)
             self._close_socket()
-            return None, msg
+            return None, None, msg
 
         # Step 2: Authorize — Discord shows an in-app approval modal
         self._send_raw(OP_FRAME, {
@@ -240,7 +284,7 @@ class Backend(BackendBase):
             msg = "Timed out waiting for Discord approval (120s)"
             log.error(msg)
             self._close_socket()
-            return None, msg
+            return None, None, msg
         finally:
             self._sock.settimeout(None)
 
@@ -249,7 +293,7 @@ class Backend(BackendBase):
             msg = f"AUTHORIZE returned no code: {resp.get('evt')} — {(resp.get('data') or {}).get('message', '')}"
             log.error(msg)
             self._close_socket()
-            return None, msg
+            return None, None, msg
 
         self._close_socket()
 
@@ -272,11 +316,12 @@ class Backend(BackendBase):
             with urllib.request.urlopen(req, timeout=30) as r:
                 token_data = json.loads(r.read().decode())
             token = token_data.get("access_token")
+            refresh = token_data.get("refresh_token")
             if not token:
                 msg = f"Token exchange gave no access_token: {token_data}"
                 log.error(msg)
-                return None, msg
-            return token, None
+                return None, None, msg
+            return token, refresh, None
         except urllib.error.HTTPError as e:
             body = ""
             try:
@@ -285,11 +330,11 @@ class Backend(BackendBase):
                 pass
             msg = f"Token exchange HTTP {e.code}: {body}"
             log.error(msg)
-            return None, msg
+            return None, None, msg
         except Exception as e:
             msg = f"Token exchange failed: {e}"
             log.error(msg)
-            return None, msg
+            return None, None, msg
 
     def disconnect(self) -> None:
         self._running = False
