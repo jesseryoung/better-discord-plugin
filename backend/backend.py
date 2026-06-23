@@ -189,13 +189,11 @@ class Backend(BackendBase):
             })
             if resp.get("evt") == "ERROR":
                 log.warning(f"AUTHENTICATE rejected (token expired?): {resp}")
-                self._running = False
-                self._close_socket()
+                self.disconnect()
                 return False
         except Exception as e:
             log.error(f"AUTHENTICATE failed: {e}")
-            self._running = False
-            self._close_socket()
+            self.disconnect()
             return False
 
         self._connected = True

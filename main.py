@@ -1,6 +1,8 @@
 import os
 import threading
 
+from loguru import logger as log
+
 import globals as gl
 from src.backend.PluginManager.PluginBase import PluginBase
 from src.backend.PluginManager.ActionHolder import ActionHolder
@@ -106,19 +108,20 @@ class BetterDiscord(PluginBase):
             return
         try:
             self.backend.disconnect()
+            settings = self.get_settings()
+            access_token = settings.get("access_token")
 
-            # Try cached token first.
-            access_token = self.get_settings().get("access_token")
-            self._set_connect_status("Connecting…")
-            ok = self.backend.connect(client_id, access_token)
-            if ok:
-                self._set_connect_status("Connected", connected=True)
-                return
+            # Try cached token first (skip if none exists).
+            if access_token:
+                self._set_connect_status("Connecting…")
+                if self.backend.connect(client_id, access_token):
+                    self._set_connect_status("Connected", connected=True)
+                    return
 
-            # Try refresh token before full OAuth flow.
-            if self._try_refresh_token(client_id):
-                self._set_connect_status("Connected", connected=True)
-                return
+                # Try refresh token before full OAuth flow.
+                if self._try_refresh_token(client_id):
+                    self._set_connect_status("Connected", connected=True)
+                    return
 
             # Full OAuth flow — opens Discord approval dialog.
             self._set_connect_status("Waiting for Discord approval…")
@@ -133,8 +136,7 @@ class BetterDiscord(PluginBase):
                 settings["refresh_token"] = refresh
             self.set_settings(settings)
 
-            ok = self.backend.connect(client_id, token)
-            if ok:
+            if self.backend.connect(client_id, token):
                 self._set_connect_status("Connected", connected=True)
             else:
                 self._set_connect_status("Token obtained but connection failed")
@@ -144,12 +146,14 @@ class BetterDiscord(PluginBase):
             self._connect_lock.release()
 
     def _try_refresh_token(self, client_id: str) -> bool:
-        """Attempt to refresh the access token using a stored refresh token."""
+        """Attempt to refresh the access token using a stored refresh token.
+
+        Caller must ensure backend is already disconnected.
+        """
         settings = self.get_settings()
         refresh_token = settings.get("refresh_token")
         if not refresh_token:
             return False
-        self.backend.disconnect()
         token, new_refresh, err = self.backend.refresh_access_token(client_id, refresh_token)
         if not token:
             log.warning(f"Token refresh failed: {err}")
@@ -203,7 +207,6 @@ class BetterDiscord(PluginBase):
     # ---------------------------------------------------------- config UI
 
     def get_settings_area(self):
-        from loguru import logger as log
         try:
             from gi.repository import Adw, Gtk
 
