@@ -137,7 +137,7 @@ class Backend(BackendBase):
                 if evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE"):
                     threading.Thread(target=self._refresh_members, daemon=True).start()
                 elif evt == "VOICE_CHANNEL_SELECT":
-                    threading.Thread(target=self._on_channel_select, daemon=True).start()
+                    threading.Thread(target=self._refresh_and_subscribe, daemon=True).start()
 
             except Exception as e:
                 log.error(f"Discord IPC listener error: {e}")
@@ -207,8 +207,10 @@ class Backend(BackendBase):
 
         self._connected = True
         self._subscribe_events()
-        self._refresh_members()
-        self._subscribe_voice_state_events(self._channel_id)
+        # Defer member refresh to a thread: it calls back into the frontend
+        # (on_members_updated) and downloads avatars, neither of which should
+        # run nested inside this connect() RPyC call.
+        threading.Thread(target=self._refresh_and_subscribe, daemon=True).start()
         return True
 
     def refresh_access_token(self, client_id: str, refresh_token: str) -> tuple[str | None, str | None, str | None]:
@@ -370,7 +372,11 @@ class Backend(BackendBase):
             except Exception as e:
                 log.error(f"Failed to subscribe to {evt} for channel {channel_id}: {e}")
 
-    def _on_channel_select(self) -> None:
+    def _refresh_and_subscribe(self) -> None:
+        """Refresh the member list, then subscribe to voice-state events for the
+        current channel. Always run on a background thread — _refresh_members
+        calls back into the frontend, so it must not run nested inside a
+        connect() RPyC call."""
         self._refresh_members()
         self._subscribe_voice_state_events(self._channel_id)
 
