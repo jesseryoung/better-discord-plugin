@@ -392,20 +392,47 @@ class Backend(BackendBase):
         cache_dir = os.path.join(tempfile.gettempdir(), "better_discord_avatars")
         os.makedirs(cache_dir, exist_ok=True)
         path = os.path.join(cache_dir, f"{cache_key}.png")
-        url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.png?size=64"
+        url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.png?size=128"
         try:
             req = urllib.request.Request(
                 url,
                 headers={"User-Agent": "DiscordBot (https://github.com/jesseryoung/better-discord-plugin, 0.0.1)"},
             )
             with urllib.request.urlopen(req, timeout=10) as r:
-                with open(path, "wb") as f:
-                    f.write(r.read())
+                data = r.read()
+            if not self._save_circular(data, path):
+                with open(path, "wb") as f:  # PIL unavailable — keep the square image
+                    f.write(data)
             self._avatar_cache[cache_key] = path
             return path
         except Exception as e:
             log.warning(f"Failed to fetch avatar for {user_id}: {e}")
             return None
+
+    @staticmethod
+    def _save_circular(data: bytes, path: str) -> bool:
+        """Crop avatar bytes to a circle (transparent corners) and save as PNG, the
+        way Discord renders avatars. Returns False if PIL isn't available so the
+        caller can fall back to the original square image."""
+        try:
+            from io import BytesIO
+            from PIL import Image, ImageDraw
+        except Exception:
+            return False
+        try:
+            img = Image.open(BytesIO(data)).convert("RGBA")
+            w, h = img.size
+            # Supersample the mask for a smooth, anti-aliased circular edge.
+            ss = 4
+            mask = Image.new("L", (w * ss, h * ss), 0)
+            ImageDraw.Draw(mask).ellipse([0, 0, w * ss - 1, h * ss - 1], fill=255)
+            mask = mask.resize((w, h), Image.LANCZOS)
+            img.putalpha(mask)
+            img.save(path)
+            return True
+        except Exception as e:
+            log.warning(f"Could not round avatar, using square: {e}")
+            return False
 
     def _refresh_members(self) -> None:
         try:
