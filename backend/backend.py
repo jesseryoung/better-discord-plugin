@@ -144,7 +144,7 @@ class Backend(BackendBase):
                 self._connected = False
                 self._running = False
                 try:
-                    self.frontend.on_members_updated()
+                    self.frontend.on_members_updated(self._connected)
                 except Exception:
                     pass
                 break
@@ -435,7 +435,7 @@ class Backend(BackendBase):
             log.error(f"Failed to refresh channel members: {e}")
             return
         try:
-            self.frontend.on_members_updated()
+            self.frontend.on_members_updated(self._connected)
         except Exception as e:
             log.error(f"Could not notify frontend of member update: {e}")
 

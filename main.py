@@ -162,9 +162,15 @@ class BetterDiscord(PluginBase):
 
     # -------------------------------------------------------------- helpers
 
-    def on_members_updated(self) -> None:
-        """Called by the backend (via RPyC) after the member list changes."""
-        self._connected = self.backend.is_connected()
+    def on_members_updated(self, connected: bool = True) -> None:
+        """Called by the backend (via RPyC) after the member list changes.
+
+        The backend passes its own connection state so we don't make a nested
+        RPyC call back into the backend while it's blocked waiting on this
+        callback — that reentrancy stalls the notification and the screen
+        stops updating when members change.
+        """
+        self._connected = connected
         try:
             from gi.repository import GLib
             GLib.idle_add(self._refresh_all_pager_displays)
