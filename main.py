@@ -172,10 +172,16 @@ class BetterDiscord(PluginBase):
             pass
 
     def _refresh_all_pager_displays(self) -> None:
+        import json
         from .actions.ChannelPager.ChannelPager import ChannelPager
+        try:
+            payload = json.loads(str(self.backend.get_slot_display_data()))
+        except Exception as e:
+            log.error(f"Failed to fetch slot display data: {e}")
+            payload = None
         for action in list(ChannelPager._instances):
             try:
-                action._refresh_display()
+                action._refresh_display(payload)
             except Exception:
                 pass
 

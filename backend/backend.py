@@ -470,6 +470,31 @@ class Backend(BackendBase):
 
         return result
 
+    def get_slot_display_data(self) -> str:
+        """Return all 9 slots' display data as a JSON string.
+
+        Collapses what used to be ~7 RPyC round-trips per slot (is_connected,
+        get_visible_members, is_muted, get_user_volume, plus per-field netref
+        access) into a single by-value transfer. Returns
+        {"connected": bool, "slots": [slot0..slot8]} where each slot is None
+        (empty) or {user_id, name, avatar_path, muted, volume}.
+        """
+        slots = self.get_visible_members()
+        out: list[dict | None] = []
+        for m in slots:
+            if m is None:
+                out.append(None)
+                continue
+            uid = m["user_id"]
+            out.append({
+                "user_id": uid,
+                "name": m["name"],
+                "avatar_path": m["avatar_path"],
+                "muted": self._muted.get(uid, False),
+                "volume": self._volumes.get(uid, 100),
+            })
+        return json.dumps({"connected": self._connected, "slots": out})
+
     def page_down(self) -> None:
         with self._members_lock:
             n = len(self._members)

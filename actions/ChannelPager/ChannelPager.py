@@ -120,11 +120,25 @@ class ChannelPager(ActionBase):
 
     # ------------------------------------------------------------ display
 
-    def _refresh_display(self) -> None:
+    def _fetch_display_payload(self) -> dict | None:
+        """Fetch the combined slot display data (one RPyC round-trip, by value)."""
+        import json
+        try:
+            return json.loads(str(self.plugin_base.backend.get_slot_display_data()))
+        except Exception as e:
+            log.error(f"ChannelPager: get_slot_display_data failed: {e}")
+            return None
+
+    def _refresh_display(self, payload: dict | None = None) -> None:
+        """Render this slot. If payload is None (interaction / on_ready), fetch it
+        directly; the bulk refresh passes a shared payload to avoid per-slot calls."""
         is_key = isinstance(self.input_ident, Input.Key)
         label_size = 10 if is_key else None
 
-        if not self.plugin_base.backend.is_connected():
+        if payload is None:
+            payload = self._fetch_display_payload()
+
+        if not payload or not payload.get("connected"):
             if self._slot_index is not None:
                 warning_path = os.path.join(self.plugin_base.PATH, "assets", "not_connected.svg")
                 self.set_media(media_path=warning_path, size=1.0)
@@ -132,7 +146,10 @@ class ChannelPager(ActionBase):
                 self.set_bottom_label("not connected to discord", font_size=label_size)
             return
 
-        member = self._get_my_member()
+        slots = payload.get("slots") or []
+        member = None
+        if self._slot_index is not None and self._slot_index < len(slots):
+            member = slots[self._slot_index]
 
         if member is None:
             self.set_media(media_path=None)
@@ -140,14 +157,8 @@ class ChannelPager(ActionBase):
             self.set_bottom_label("", font_size=label_size)
             return
 
-        user_id = member["user_id"]
-        try:
-            muted = self.plugin_base.backend.is_muted(user_id)
-            volume = self.plugin_base.backend.get_user_volume(user_id)
-        except Exception:
-            muted = False
-            volume = 100
-
+        muted = member.get("muted", False)
+        volume = member.get("volume", 100)
         avatar_path = member.get("avatar_path")
         icon_path = avatar_path or os.path.join(self.plugin_base.PATH, "assets", "person.svg")
         self.set_media(media_path=icon_path, size=0.85)
