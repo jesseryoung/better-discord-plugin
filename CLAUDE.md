@@ -326,4 +326,4 @@ The Flatpak also needs the permission: `flatpak override --user --filesystem=xdg
 
 ## Label Font Sizes
 
-Physical keys need `font_size=8` to fit name + volume. Dials have more display space and can use the default (pass `font_size=None`). Check `isinstance(self.input_ident, Input.Key)` to branch.
+`ChannelPager` renders name + volume labels at `font_size=15` for all input types (physical keys, dials, and touchscreen). Earlier versions branched on `isinstance(self.input_ident, Input.Key)` to shrink the key font, but a single size of 15 reads well everywhere.

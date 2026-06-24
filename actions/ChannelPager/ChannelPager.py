@@ -132,8 +132,7 @@ class ChannelPager(ActionBase):
     def _refresh_display(self, payload: dict | None = None) -> None:
         """Render this slot. If payload is None (interaction / on_ready), fetch it
         directly; the bulk refresh passes a shared payload to avoid per-slot calls."""
-        is_key = isinstance(self.input_ident, Input.Key)
-        label_size = 10 if is_key else None
+        label_size = 15
 
         if payload is None:
             payload = self._fetch_display_payload()
