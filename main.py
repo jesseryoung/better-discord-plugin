@@ -27,6 +27,8 @@ class BetterDiscord(PluginBase):
         )
 
         self._connect_lock = threading.Lock()
+        self._user_connecting = threading.Event()
+        self._connected = False
 
         # On startup only try the cached token — never auto-prompt for OAuth.
         threading.Thread(target=self._try_cached_connect, daemon=True).start()
@@ -75,15 +77,17 @@ class BetterDiscord(PluginBase):
         if not client_id or not access_token:
             return
         if self.backend.connect(client_id, access_token):
+            self._connected = True
             return
-        self._try_refresh_token(client_id)
+        if self._try_refresh_token(client_id):
+            self._connected = True
 
     def _reconnect_watcher(self) -> None:
         """Polls every 10 s and reconnects automatically when Discord comes back up."""
         import time
         while True:
             time.sleep(10)
-            if self.backend.is_connected():
+            if self._connected or self._user_connecting.is_set():
                 continue
             settings = self.get_settings()
             client_id = settings.get("client_id", "")
@@ -93,9 +97,13 @@ class BetterDiscord(PluginBase):
             if not self._connect_lock.acquire(blocking=False):
                 continue
             try:
+                if self._user_connecting.is_set():
+                    continue
                 self.backend.disconnect()
-                if not self.backend.connect(client_id, access_token):
-                    self._try_refresh_token(client_id)
+                if self.backend.connect(client_id, access_token):
+                    self._connected = True
+                elif self._try_refresh_token(client_id):
+                    self._connected = True
             except Exception:
                 pass
             finally:
@@ -103,10 +111,11 @@ class BetterDiscord(PluginBase):
 
     def _try_connect(self, client_id: str, client_secret: str) -> None:
         """Full OAuth flow — called by the Connect button."""
-        if not self._connect_lock.acquire(blocking=False):
-            self._set_connect_status("Already connecting…")
-            return
+        # Signal the reconnect watcher to yield, then wait for the lock.
+        self._user_connecting.set()
+        self._connect_lock.acquire()
         try:
+            self._connected = False
             self.backend.disconnect()
             settings = self.get_settings()
             access_token = settings.get("access_token")
@@ -115,11 +124,13 @@ class BetterDiscord(PluginBase):
             if access_token:
                 self._set_connect_status("Connecting…")
                 if self.backend.connect(client_id, access_token):
+                    self._connected = True
                     self._set_connect_status("Connected", connected=True)
                     return
 
                 # Try refresh token before full OAuth flow.
                 if self._try_refresh_token(client_id):
+                    self._connected = True
                     self._set_connect_status("Connected", connected=True)
                     return
 
@@ -137,12 +148,14 @@ class BetterDiscord(PluginBase):
             self.set_settings(settings)
 
             if self.backend.connect(client_id, token):
+                self._connected = True
                 self._set_connect_status("Connected", connected=True)
             else:
                 self._set_connect_status("Token obtained but connection failed")
         except Exception as e:
             self._set_connect_status(f"Error: {e}")
         finally:
+            self._user_connecting.clear()
             self._connect_lock.release()
 
     def _try_refresh_token(self, client_id: str) -> bool:
@@ -170,6 +183,7 @@ class BetterDiscord(PluginBase):
 
     def on_members_updated(self) -> None:
         """Called by the backend (via RPyC) after the member list changes."""
+        self._connected = self.backend.is_connected()
         try:
             from gi.repository import GLib
             GLib.idle_add(self._refresh_all_pager_displays)
@@ -245,7 +259,7 @@ class BetterDiscord(PluginBase):
             self._connect_row.add_suffix(self._connect_btn)
             self._connect_row.set_activatable_widget(self._connect_btn)
 
-            if self.backend.is_connected():
+            if self._connected:
                 self._apply_connected_state()
             else:
                 self._connect_row.set_subtitle("Enter credentials above and click Connect")
