@@ -33,6 +33,7 @@ class ChannelPager(ActionBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._slot_index: int | None = None
+        self._last_tap = 0.0
 
     def on_ready(self) -> None:
         ChannelPager._instances.add(self)
@@ -103,6 +104,16 @@ class ChannelPager(ActionBase):
     # ---------------------------------------------------------- interactions
 
     def _handle_tap(self) -> None:
+        # A single physical press is delivered through more than one path
+        # (on_key_down and event_callback's "Down"/"Short Press" branch), which
+        # would toggle mute twice — Discord ends muted but the local state flips
+        # back, so the label reverts to volume. Debounce so one press = one toggle.
+        import time
+        now = time.monotonic()
+        if now - self._last_tap < 0.1:
+            return
+        self._last_tap = now
+
         member = self._get_my_member()
         if member is None:
             return
