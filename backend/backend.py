@@ -167,7 +167,16 @@ class Backend(BackendBase):
 
         # Step 1: Handshake (pre-listener, synchronous)
         self._send_raw(OP_HANDSHAKE, {"v": 1, "client_id": client_id})
-        _, resp = self._recv_raw()
+        self._sock.settimeout(10)
+        try:
+            _, resp = self._recv_raw()
+        except socket.timeout:
+            log.error("Discord IPC handshake timed out")
+            self._close_socket()
+            return False
+        finally:
+            if self._sock:
+                self._sock.settimeout(None)
         if resp.get("evt") != "READY":
             log.error(f"Discord handshake failed: {resp}")
             self._close_socket()

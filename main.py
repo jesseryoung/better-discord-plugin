@@ -113,7 +113,10 @@ class BetterDiscord(PluginBase):
         """Full OAuth flow — called by the Connect button."""
         # Signal the reconnect watcher to yield, then wait for the lock.
         self._user_connecting.set()
-        self._connect_lock.acquire()
+        if not self._connect_lock.acquire(timeout=15):
+            self._user_connecting.clear()
+            self._set_connect_status("Timed out waiting for background reconnect to finish")
+            return
         try:
             self._connected = False
             self.backend.disconnect()
@@ -136,7 +139,10 @@ class BetterDiscord(PluginBase):
 
             # Full OAuth flow — opens Discord approval dialog.
             self._set_connect_status("Waiting for Discord approval…")
-            token, refresh, err = self.backend.get_fresh_token(client_id, client_secret)
+            result = self.backend.get_fresh_token(client_id, client_secret)
+            token = str(result[0]) if result[0] else None
+            refresh = str(result[1]) if result[1] else None
+            err = str(result[2]) if result[2] else None
             if not token:
                 self._set_connect_status(err or "Authorization failed")
                 return
@@ -167,7 +173,10 @@ class BetterDiscord(PluginBase):
         refresh_token = settings.get("refresh_token")
         if not refresh_token:
             return False
-        token, new_refresh, err = self.backend.refresh_access_token(client_id, refresh_token)
+        result = self.backend.refresh_access_token(client_id, refresh_token)
+        token = str(result[0]) if result[0] else None
+        new_refresh = str(result[1]) if result[1] else None
+        err = str(result[2]) if result[2] else None
         if not token:
             log.warning(f"Token refresh failed: {err}")
             settings.pop("refresh_token", None)
