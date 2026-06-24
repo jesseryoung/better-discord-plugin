@@ -104,47 +104,35 @@ class BetterDiscord(PluginBase):
                     self._connected = True
                 elif self._try_refresh_token(client_id):
                     self._connected = True
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Reconnect watcher error: {e}")
             finally:
                 self._connect_lock.release()
 
     def _try_connect(self, client_id: str, client_secret: str) -> None:
-        """Full OAuth flow — called by the Connect button."""
+        """Full OAuth flow — called by the Connect button.
+
+        Skips cached/refresh token attempts since those are handled by the
+        reconnect watcher. The user clicked Connect with a secret specifically
+        to run the OAuth flow.
+        """
         # Signal the reconnect watcher to yield, then wait for the lock.
         self._user_connecting.set()
         if not self._connect_lock.acquire(timeout=15):
             self._user_connecting.clear()
-            self._set_connect_status("Timed out waiting for background reconnect to finish")
+            self._set_connect_status("Timed out waiting for background reconnect to finish", connected=False)
             return
         try:
             self._connected = False
             self.backend.disconnect()
-            settings = self.get_settings()
-            access_token = settings.get("access_token")
 
-            # Try cached token first (skip if none exists).
-            if access_token:
-                self._set_connect_status("Connecting…")
-                if self.backend.connect(client_id, access_token):
-                    self._connected = True
-                    self._set_connect_status("Connected", connected=True)
-                    return
-
-                # Try refresh token before full OAuth flow.
-                if self._try_refresh_token(client_id):
-                    self._connected = True
-                    self._set_connect_status("Connected", connected=True)
-                    return
-
-            # Full OAuth flow — opens Discord approval dialog.
             self._set_connect_status("Waiting for Discord approval…")
             result = self.backend.get_fresh_token(client_id, client_secret)
             token = str(result[0]) if result[0] else None
             refresh = str(result[1]) if result[1] else None
             err = str(result[2]) if result[2] else None
             if not token:
-                self._set_connect_status(err or "Authorization failed")
+                self._set_connect_status(err or "Authorization failed", connected=False)
                 return
 
             settings = self.get_settings()
@@ -157,9 +145,9 @@ class BetterDiscord(PluginBase):
                 self._connected = True
                 self._set_connect_status("Connected", connected=True)
             else:
-                self._set_connect_status("Token obtained but connection failed")
+                self._set_connect_status("Token obtained but connection failed", connected=False)
         except Exception as e:
-            self._set_connect_status(f"Error: {e}")
+            self._set_connect_status(f"Error: {e}", connected=False)
         finally:
             self._user_connecting.clear()
             self._connect_lock.release()
@@ -294,6 +282,8 @@ class BetterDiscord(PluginBase):
         self.set_settings(settings)
 
     def _on_connect_clicked(self, _widget) -> None:
+        if self._user_connecting.is_set():
+            return
         client_id = self._client_id_row.get_text().strip()
         client_secret = self._client_secret_row.get_text().strip()
         if not client_id or not client_secret:
@@ -308,13 +298,19 @@ class BetterDiscord(PluginBase):
             daemon=True,
         ).start()
 
-    def _set_connect_status(self, msg: str, connected: bool = False) -> None:
+    def _set_connect_status(self, msg: str, connected: bool | None = None) -> None:
+        """Update the connection status UI.
+
+        connected=True  → show connected state, disable button
+        connected=False → show disconnected state, re-enable button
+        connected=None  → progress update, only change subtitle text
+        """
         def _update():
             try:
                 self._connect_row.set_subtitle(msg)
-                if connected:
+                if connected is True:
                     self._apply_connected_state()
-                else:
+                elif connected is False:
                     self._connect_btn.set_label("Connect")
                     self._connect_btn.set_sensitive(True)
                     self._connect_btn.remove_css_class("success")
