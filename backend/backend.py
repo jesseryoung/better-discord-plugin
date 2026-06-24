@@ -6,6 +6,7 @@ import queue
 import socket
 import struct
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +36,7 @@ class Backend(BackendBase):
         self._listener_thread: threading.Thread | None = None
         self._avatar_cache: dict[str, str] = {}
         self._muted: dict[str, bool] = {}
+        self._last_toggle: dict[str, float] = {}
         self._current_user_id: str | None = None
         self._channel_id: str | None = None
 
@@ -567,6 +569,15 @@ class Backend(BackendBase):
             log.error(f"set_user_mute failed for {user_id}: {e}")
 
     def toggle_mute(self, user_id: str) -> None:
+        # A single physical press can reach here several times: through both
+        # on_key_down and event_callback, and once per ChannelPager instance
+        # when StreamController double-loads the page. This backend is the one
+        # shared chokepoint, so debounce per user here — otherwise the extra
+        # toggles flip the state back and the label desyncs from Discord.
+        now = time.monotonic()
+        if now - self._last_toggle.get(user_id, 0.0) < 0.3:
+            return
+        self._last_toggle[user_id] = now
         self.set_user_mute(user_id, not self._muted.get(user_id, False))
 
     def is_muted(self, user_id: str) -> bool:
