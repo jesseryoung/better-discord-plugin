@@ -5,6 +5,13 @@ from loguru import logger as log
 from src.backend.PluginManager.ActionBase import ActionBase
 from src.backend.DeckManagement.InputIdentifier import Input
 
+# Name labels: scale the font from MAX (short names) down to the legible MIN
+# as the name lengthens. 10 is the smallest size we consider readable.
+NAME_FONT_MAX = 15
+NAME_FONT_MIN = 10
+# Names up to this length render at NAME_FONT_MAX; each extra char drops 1pt.
+NAME_FONT_FULL_AT = 5
+
 
 class ChannelPager(ActionBase):
     _instances: weakref.WeakSet = weakref.WeakSet()
@@ -120,6 +127,17 @@ class ChannelPager(ActionBase):
 
     # ------------------------------------------------------------ display
 
+    @staticmethod
+    def _name_font_size(name: str) -> int:
+        """Largest legible font size that should fit the name.
+
+        A plugin can't query the deck's label pixel width, so this approximates
+        "fit" by character count: short names get NAME_FONT_MAX, shrinking 1pt
+        per character beyond NAME_FONT_FULL_AT down to the NAME_FONT_MIN floor.
+        """
+        over = max(0, len((name or "").strip()) - NAME_FONT_FULL_AT)
+        return max(NAME_FONT_MIN, NAME_FONT_MAX - over)
+
     def _fetch_display_payload(self) -> dict | None:
         """Fetch the combined slot display data (one RPyC round-trip, by value)."""
         import json
@@ -161,5 +179,6 @@ class ChannelPager(ActionBase):
         avatar_path = member.get("avatar_path")
         icon_path = avatar_path or os.path.join(self.plugin_base.PATH, "assets", "person.svg")
         self.set_media(media_path=icon_path, size=0.85)
-        self.set_top_label(member["name"], font_size=label_size)
+        name = member["name"]
+        self.set_top_label(name, font_size=self._name_font_size(name))
         self.set_bottom_label("mute" if muted else f"{volume}%", font_size=label_size)

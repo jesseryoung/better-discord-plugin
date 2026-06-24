@@ -326,4 +326,8 @@ The Flatpak also needs the permission: `flatpak override --user --filesystem=xdg
 
 ## Label Font Sizes
 
-`ChannelPager` renders name + volume labels at `font_size=15` for all input types (physical keys, dials, and touchscreen). Earlier versions branched on `isinstance(self.input_ident, Input.Key)` to shrink the key font, but a single size of 15 reads well everywhere.
+`ChannelPager` label sizing (all input types — keys, dials, touchscreen):
+- **Name** (top label): dynamic via `_name_font_size()`. Names ≤ `NAME_FONT_FULL_AT` (5) chars render at `NAME_FONT_MAX` (15); each extra char drops 1pt down to the `NAME_FONT_MIN` (10) floor. A plugin can't query the deck's label pixel width, so character count is used as a width proxy.
+- **Volume / mute** (bottom label): constant `font_size=15`.
+
+(Earlier versions branched on `isinstance(self.input_ident, Input.Key)` and/or used a flat size; the dynamic name size replaced that.)
