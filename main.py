@@ -251,9 +251,21 @@ class BetterDiscord(PluginBase):
             else:
                 self._connect_row.set_subtitle("Enter credentials above and click Connect")
 
+            self._logout_row = Adw.ActionRow()
+            self._logout_row.set_title("Log Out")
+            self._logout_row.set_subtitle("Disconnect and erase saved credentials")
+
+            self._logout_btn = Gtk.Button(label="Log Out")
+            self._logout_btn.set_valign(Gtk.Align.CENTER)
+            self._logout_btn.add_css_class("destructive-action")
+            self._logout_btn.connect("clicked", self._on_logout_clicked)
+            self._logout_row.add_suffix(self._logout_btn)
+            self._logout_row.set_activatable_widget(self._logout_btn)
+
             group.add(self._client_id_row)
             group.add(self._client_secret_row)
             group.add(self._connect_row)
+            group.add(self._logout_row)
 
             return group
         except Exception as e:
@@ -280,6 +292,20 @@ class BetterDiscord(PluginBase):
         self._connect_btn.set_label("Connecting…")
         self._connect_btn.set_sensitive(False)
         self._conn_request.put((client_id, client_secret))
+
+    def _on_logout_clicked(self, _widget) -> None:
+        """Disconnect and erase all saved credentials/tokens."""
+        self._connected = False
+        try:
+            self.backend.disconnect()
+        except Exception as e:
+            log.error(f"BetterDiscord: disconnect during logout failed: {e}")
+        # Clear the input fields first, then wipe settings so the final
+        # persisted state is empty (set_text triggers _on_credentials_changed).
+        self._client_id_row.set_text("")
+        self._client_secret_row.set_text("")
+        self.set_settings({})
+        self._set_connect_status("Logged out — enter credentials to reconnect", connected=False)
 
     def _set_connect_status(self, msg: str, connected: bool | None = None) -> None:
         """Update the connection status UI.
