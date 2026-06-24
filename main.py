@@ -1,4 +1,5 @@
 import os
+import queue
 import threading
 
 from loguru import logger as log
@@ -26,13 +27,10 @@ class BetterDiscord(PluginBase):
             open_in_terminal=False,
         )
 
-        self._connect_lock = threading.Lock()
-        self._user_connecting = threading.Event()
         self._connected = False
+        self._conn_request: queue.Queue = queue.Queue()
 
-        # On startup only try the cached token — never auto-prompt for OAuth.
-        threading.Thread(target=self._try_cached_connect, daemon=True).start()
-        threading.Thread(target=self._reconnect_watcher, daemon=True).start()
+        threading.Thread(target=self._connection_manager, daemon=True).start()
 
         self.channel_pager_holder = ActionHolder(
             plugin_base=self,
@@ -69,59 +67,50 @@ class BetterDiscord(PluginBase):
 
     # ----------------------------------------------------------------- auth
 
-    def _try_cached_connect(self) -> None:
-        """Startup path: only attempt connection if a cached token exists."""
+    def _connection_manager(self) -> None:
+        """Single thread that owns all connection state transitions.
+
+        Processes user-initiated OAuth requests from the queue and
+        auto-reconnects with cached/refreshed tokens when idle.
+        """
+        # Try cached token on startup.
+        self._attempt_cached_connect()
+
+        while True:
+            try:
+                request = self._conn_request.get(timeout=10)
+            except queue.Empty:
+                request = None
+
+            if request is not None:
+                client_id, client_secret = request
+                self._do_fresh_connect(client_id, client_secret)
+            elif not self._connected:
+                self._attempt_cached_connect()
+
+    def _attempt_cached_connect(self) -> None:
+        """Try connecting with cached or refreshed token. No user interaction."""
+        if not self._conn_request.empty():
+            return
         settings = self.get_settings()
         client_id = settings.get("client_id", "")
         access_token = settings.get("access_token")
         if not client_id or not access_token:
             return
-        if self.backend.connect(client_id, access_token):
-            self._connected = True
-            return
-        if self._try_refresh_token(client_id):
-            self._connected = True
+        try:
+            self.backend.disconnect()
+            if self.backend.connect(client_id, access_token):
+                self._connected = True
+                return
+            if not self._conn_request.empty():
+                return
+            if self._try_refresh_token(client_id):
+                self._connected = True
+        except Exception as e:
+            log.debug(f"Cached connect attempt failed: {e}")
 
-    def _reconnect_watcher(self) -> None:
-        """Polls every 10 s and reconnects automatically when Discord comes back up."""
-        import time
-        while True:
-            time.sleep(10)
-            if self._connected or self._user_connecting.is_set():
-                continue
-            settings = self.get_settings()
-            client_id = settings.get("client_id", "")
-            access_token = settings.get("access_token")
-            if not client_id or not access_token:
-                continue
-            if not self._connect_lock.acquire(blocking=False):
-                continue
-            try:
-                if self._user_connecting.is_set():
-                    continue
-                self.backend.disconnect()
-                if self.backend.connect(client_id, access_token):
-                    self._connected = True
-                elif self._try_refresh_token(client_id):
-                    self._connected = True
-            except Exception as e:
-                log.debug(f"Reconnect watcher error: {e}")
-            finally:
-                self._connect_lock.release()
-
-    def _try_connect(self, client_id: str, client_secret: str) -> None:
-        """Full OAuth flow — called by the Connect button.
-
-        Skips cached/refresh token attempts since those are handled by the
-        reconnect watcher. The user clicked Connect with a secret specifically
-        to run the OAuth flow.
-        """
-        # Signal the reconnect watcher to yield, then wait for the lock.
-        self._user_connecting.set()
-        if not self._connect_lock.acquire(timeout=15):
-            self._user_connecting.clear()
-            self._set_connect_status("Timed out waiting for background reconnect to finish", connected=False)
-            return
+    def _do_fresh_connect(self, client_id: str, client_secret: str) -> None:
+        """Full OAuth flow, runs on the connection manager thread."""
         try:
             self._connected = False
             self.backend.disconnect()
@@ -148,19 +137,14 @@ class BetterDiscord(PluginBase):
                 self._set_connect_status("Token obtained but connection failed", connected=False)
         except Exception as e:
             self._set_connect_status(f"Error: {e}", connected=False)
-        finally:
-            self._user_connecting.clear()
-            self._connect_lock.release()
 
     def _try_refresh_token(self, client_id: str) -> bool:
-        """Attempt to refresh the access token using a stored refresh token.
-
-        Caller must ensure backend is already disconnected.
-        """
+        """Attempt to refresh the access token using a stored refresh token."""
         settings = self.get_settings()
         refresh_token = settings.get("refresh_token")
         if not refresh_token:
             return False
+        self.backend.disconnect()
         result = self.backend.refresh_access_token(client_id, refresh_token)
         token = str(result[0]) if result[0] else None
         new_refresh = str(result[1]) if result[1] else None
@@ -282,21 +266,14 @@ class BetterDiscord(PluginBase):
         self.set_settings(settings)
 
     def _on_connect_clicked(self, _widget) -> None:
-        if self._user_connecting.is_set():
-            return
         client_id = self._client_id_row.get_text().strip()
         client_secret = self._client_secret_row.get_text().strip()
         if not client_id or not client_secret:
             self._set_connect_status("Enter Client ID and Client Secret first", connected=False)
             return
-        # Disable immediately in the main thread before spawning the worker.
         self._connect_btn.set_label("Connecting…")
         self._connect_btn.set_sensitive(False)
-        threading.Thread(
-            target=self._try_connect,
-            args=(client_id, client_secret),
-            daemon=True,
-        ).start()
+        self._conn_request.put((client_id, client_secret))
 
     def _set_connect_status(self, msg: str, connected: bool | None = None) -> None:
         """Update the connection status UI.
